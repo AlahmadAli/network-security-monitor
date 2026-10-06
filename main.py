@@ -14,7 +14,8 @@ def process_packet(packet):
             source_port = packet[UDP].sport
             destination_port = packet[UDP].dport
         else:
-            protocol = "other"
+            protocol = "Other"
+            source_port, destination_port = None, None
         
         print(f"Source: {source_ip}:{source_port}\n"
               f"Destination: {destination_ip}:{destination_port}\n"
