@@ -7,11 +7,30 @@ stats = {
     "other": 0
 }
 
+ip_counts = {}
+local_ip = "10.0.0.71"
+
 def process_packet(packet):
     if IP in packet:
         stats["total"] += 1
         source_ip = packet[IP].src
         destination_ip = packet[IP].dst
+
+        if destination_ip == local_ip:
+            remote_ip = source_ip
+
+        elif source_ip == local_ip:
+            remote_ip = destination_ip
+
+        else:
+            remote_ip = None
+
+        if remote_ip is not None:
+            if remote_ip not in ip_counts:
+                ip_counts[remote_ip] = 1
+
+            else:
+                ip_counts[remote_ip] += 1
 
         #tcp packet info
         if TCP in packet:
@@ -42,7 +61,7 @@ def process_packet(packet):
 
 
 print("Monitoring network traffic... Press Ctrl+C to stop.\n")
-sniff(prn=process_packet, count= 10, filter = "ip")
+sniff(prn=process_packet, count=10, filter="ip")
 
 #packet summary
 print(f"Network Summary\n"
@@ -52,3 +71,11 @@ print(f"Network Summary\n"
       f"UDP packets: {stats["udp"]}\n"
       f"Other packets: {stats["other"]}\n"
       )
+
+print("Remote connections\n-------------------------")
+
+for ip_address, count in sorted(
+        ip_counts.items(),
+        key=lambda item: item[1],
+        reverse=True):
+    print(f"{ip_address}: {count} packets")
