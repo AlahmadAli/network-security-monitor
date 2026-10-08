@@ -8,7 +8,7 @@ stats = {
 }
 
 ip_counts = {}
-local_ip = "10.0.0.71"
+local_ip = "172.30.125.177"
 
 def process_packet(packet):
     if IP in packet:
@@ -61,7 +61,7 @@ def process_packet(packet):
 
 
 print("Monitoring network traffic... Press Ctrl+C to stop.\n")
-sniff(prn=process_packet, count=10, filter="ip")
+sniff(prn=process_packet, count=100, filter="ip")
 
 #packet summary
 print(f"Network Summary\n"
