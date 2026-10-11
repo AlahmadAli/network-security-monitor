@@ -1,4 +1,5 @@
 from scapy.all import IP, TCP, UDP
+import socket
 
 stats = {
     "total": 0,
@@ -8,7 +9,15 @@ stats = {
 }
 
 ip_counts = {}
-local_ip = "172.30.125.177"
+
+def get_local_ip():
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.connect(("8.8.8.8", 0))
+    local_ip = sock.getsockname()[0]
+    sock.close()
+    return local_ip
+
+local_ip = get_local_ip()
 
 def process_packet(packet):
     if IP in packet:
@@ -58,3 +67,4 @@ def process_packet(packet):
               f"Protocol: {protocol}\n"
               f"-------------------------\n"
               )
+

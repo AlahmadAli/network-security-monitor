@@ -1,8 +1,6 @@
 import packet_analyzer
 from scapy.all import sniff
 
-
-
 print("Monitoring network traffic... Press Ctrl+C to stop.\n")
 sniff(prn=packet_analyzer.process_packet, count=100, filter="ip")
 
