@@ -27,4 +27,8 @@ for ip_address, ports in sorted(
         packet_analyzer.ip_ports.items(),
         key=lambda item: len(item[1]),
         reverse=True):
-    print(f"{ip_address}: {', '.join(map(str, sorted(ports)))}")
+    port_info = []
+    for port in sorted(ports):
+        service = packet_analyzer.get_service(port)
+        port_info.append(f"{port} ({service})")
+    print(f"{ip_address}: {', '.join(port_info)}")

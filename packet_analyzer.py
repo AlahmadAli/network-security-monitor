@@ -88,3 +88,15 @@ def process_packet(packet):
               f"Protocol: {protocol}\n"
               f"-------------------------\n"
               )
+
+def get_service(port):
+    try:
+        service = socket.getservbyport(port)
+    except OSError:
+        service = "Unknown"
+
+    return service
+
+print(get_service(80)) 
+print(get_service(22))
+print(get_service(54321))
