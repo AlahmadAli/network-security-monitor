@@ -12,6 +12,8 @@ ip_counts = {}
 
 ip_ports = {}
 
+ip_bytes = {}
+
 def get_local_ip():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.connect(("8.8.8.8", 0))
@@ -65,8 +67,15 @@ def process_packet(packet):
         if remote_ip is not None:
             if remote_ip not in ip_counts:
                 ip_counts[remote_ip] = 1
+
             else:
                 ip_counts[remote_ip] += 1
+
+        if remote_ip is not None:
+            if remote_ip not in ip_bytes:
+                ip_bytes[remote_ip] = len(packet)
+            else:
+                ip_bytes[remote_ip] += len(packet)
 
         # determine the remote port based on the direction of the packet
 
@@ -97,6 +106,12 @@ def get_service(port):
 
     return service
 
-print(get_service(80)) 
-print(get_service(22))
-print(get_service(54321))
+def format_bytes(size):
+    if size < 1024:
+        return f"{size} B"
+    elif size < 1024 ** 2:
+        return f"{size / 1024:.2f} KB"
+    elif size < 1024 ** 3:
+        return f"{size / (1024 ** 2):.2f} MB"
+    else:
+        return f"{size / (1024 ** 3):.2f} GB"
