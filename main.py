@@ -2,7 +2,7 @@ import packet_analyzer
 from scapy.all import sniff
 
 print("Monitoring network traffic... Press Ctrl+C to stop.\n")
-sniff(prn=packet_analyzer.process_packet, count=300, filter="ip")
+sniff(prn=packet_analyzer.process_packet, count=50, filter="ip")
 
 #packet summary
 print(f"Network Summary\n"
@@ -19,7 +19,7 @@ for ip_address, count in sorted(
         packet_analyzer.ip_counts.items(),
         key=lambda item: item[1],
         reverse=True):
-    print(f"{ip_address}: {count} packets")
+    print(f"{ip_address} ({packet_analyzer.get_hostname(ip_address)}): {count} packets")
 
 
 print("\nRemote ports\n-------------------------")
@@ -33,7 +33,7 @@ for ip_address, ports in sorted(
         port_info.append(f"{port} ({service})")
     print(f"{ip_address}: {', '.join(port_info)}")
 
-print("\nRemote IP bytes\n-------------------------")
+print("\nTraffic Volume\n-------------------------")
 for ip_address, byte_count in sorted(
         packet_analyzer.ip_bytes.items(),
         key=lambda item: item[1],

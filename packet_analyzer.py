@@ -106,6 +106,14 @@ def get_service(port):
 
     return service
 
+def get_hostname(ip_address):
+    try:
+        hostname = socket.gethostbyaddr(ip_address)[0]
+    except OSError: #includes gaierror and herror, and whatever else may occur
+        hostname = "Unknown"
+
+    return hostname
+
 def format_bytes(size):
     if size < 1024:
         return f"{size} B"
@@ -115,3 +123,4 @@ def format_bytes(size):
         return f"{size / (1024 ** 2):.2f} MB"
     else:
         return f"{size / (1024 ** 3):.2f} GB"
+
