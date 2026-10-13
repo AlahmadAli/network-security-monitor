@@ -2,7 +2,7 @@ import packet_analyzer
 from scapy.all import sniff
 
 print("Monitoring network traffic... Press Ctrl+C to stop.\n")
-sniff(prn=packet_analyzer.process_packet, count=50, filter="ip")
+sniff(prn=packet_analyzer.process_packet, count=20, filter="ip")
 
 #packet summary
 print(f"Network Summary\n"
@@ -15,27 +15,27 @@ print(f"Network Summary\n"
 
 print("Remote connections\n-------------------------")
 
-for ip_address, count in sorted(
-        packet_analyzer.ip_counts.items(),
-        key=lambda item: item[1],
+for ip_address, host_data in sorted(
+        packet_analyzer.hosts.items(),
+        key=lambda item: item[1]["packets"],
         reverse=True):
-    print(f"{ip_address} ({packet_analyzer.get_hostname(ip_address)}): {count} packets")
+    print(f"{ip_address} ({packet_analyzer.get_hostname(ip_address)}): {host_data['packets']} packets")
 
 
 print("\nRemote ports\n-------------------------")
-for ip_address, ports in sorted(
-        packet_analyzer.ip_ports.items(),
-        key=lambda item: len(item[1]),
+for ip_address, host_data in sorted(
+        packet_analyzer.hosts.items(),
+        key=lambda item: len(item[1]["ports"]),
         reverse=True):
     port_info = []
-    for port in sorted(ports):
+    for port in sorted(host_data["ports"]):
         service = packet_analyzer.get_service(port)
         port_info.append(f"{port} ({service})")
     print(f"{ip_address}: {', '.join(port_info)}")
 
 print("\nTraffic Volume\n-------------------------")
-for ip_address, byte_count in sorted(
-        packet_analyzer.ip_bytes.items(),
-        key=lambda item: item[1],
+for ip_address, host_data in sorted(
+        packet_analyzer.hosts.items(),
+        key=lambda item: item[1]["bytes"],
         reverse=True):
-    print(f"{ip_address}: {packet_analyzer.format_bytes(byte_count)}")
+    print(f"{ip_address}: {packet_analyzer.format_bytes(host_data['bytes'])}")

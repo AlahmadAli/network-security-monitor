@@ -8,12 +8,8 @@ stats = {
     "other": 0
 }
 
-ip_counts = {}
 
-ip_ports = {}
-
-ip_bytes = {}
-
+hosts = {}
 def get_local_ip():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.connect(("8.8.8.8", 0))
@@ -63,19 +59,15 @@ def process_packet(packet):
             source_port, destination_port = None, None
 
 
-        # update ip_counts dictionary with remote IP and port information
+        # update packet count and traffic volume for remote IP address
         if remote_ip is not None:
-            if remote_ip not in ip_counts:
-                ip_counts[remote_ip] = 1
+            if remote_ip not in hosts:
+                hosts[remote_ip] = {"packets": 0,
+                                     "ports": set(),
+                                     "bytes": 0}
 
-            else:
-                ip_counts[remote_ip] += 1
-
-        if remote_ip is not None:
-            if remote_ip not in ip_bytes:
-                ip_bytes[remote_ip] = len(packet)
-            else:
-                ip_bytes[remote_ip] += len(packet)
+            hosts[remote_ip]["packets"] += 1
+            hosts[remote_ip]["bytes"] += len(packet)
 
         # determine the remote port based on the direction of the packet
 
@@ -87,9 +79,7 @@ def process_packet(packet):
             remote_port = None
 
         if remote_port is not None:
-            if remote_ip not in ip_ports:
-                ip_ports[remote_ip] = set()
-            ip_ports[remote_ip].add(remote_port)
+            hosts[remote_ip]["ports"].add(remote_port)
 
         #summary
         print(f"Source: {source_ip}:{source_port}\n"
