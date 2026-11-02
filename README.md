@@ -1,4 +1,4 @@
-# NETWORK SECURITY MONITOR
+# Network Security Monitor
 
 This Python application monitors network traffic, summarizes network activity and identifies potentially suspicious behaviour.
 
