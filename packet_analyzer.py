@@ -8,8 +8,9 @@ stats = {
     "other": 0
 }
 
-
 hosts = {}
+
+
 def get_local_ip():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.connect(("8.8.8.8", 0))
@@ -17,7 +18,9 @@ def get_local_ip():
     sock.close()
     return local_ip
 
+
 local_ip = get_local_ip()
+
 
 def process_packet(packet):
     if IP in packet:
@@ -37,34 +40,34 @@ def process_packet(packet):
             remote_ip = None
             remote_port_location = None
 
-        #tcp packet info
+        # tcp packet info
         if TCP in packet:
             stats["tcp"] += 1
             protocol = "TCP"
             source_port = packet[TCP].sport
             destination_port = packet[TCP].dport
 
-        #udp packet info
+        # udp packet info
         elif UDP in packet:
             stats["udp"] += 1
             protocol = "UDP"
             source_port = packet[UDP].sport
             destination_port = packet[UDP].dport
 
-        
-        #other (unimplemented yet) packet info
+        # other (unimplemented yet) packet info
         else:
             stats["other"] += 1
             protocol = "Other"
             source_port, destination_port = None, None
 
-
         # update packet count and traffic volume for remote IP address
         if remote_ip is not None:
             if remote_ip not in hosts:
                 hosts[remote_ip] = {"packets": 0,
-                                     "ports": set(),
-                                     "bytes": 0}
+                                    "ports": set(),
+                                    "bytes": 0,
+                                    "alerts": []
+                                    }
 
             hosts[remote_ip]["packets"] += 1
             hosts[remote_ip]["bytes"] += len(packet)
@@ -81,12 +84,13 @@ def process_packet(packet):
         if remote_port is not None:
             hosts[remote_ip]["ports"].add(remote_port)
 
-        #summary
+        # summary
         print(f"Source: {source_ip}:{source_port}\n"
               f"Destination: {destination_ip}:{destination_port}\n"
               f"Protocol: {protocol}\n"
               f"-------------------------\n"
               )
+
 
 def get_service(port):
     try:
@@ -96,13 +100,15 @@ def get_service(port):
 
     return service
 
+
 def get_hostname(ip_address):
     try:
         hostname = socket.gethostbyaddr(ip_address)[0]
-    except OSError: #includes gaierror and herror, and whatever else may occur
+    except OSError:  # includes gaierror and herror, and whatever else may occur
         hostname = "Unknown"
 
     return hostname
+
 
 def format_bytes(size):
     if size < 1024:
@@ -114,3 +120,13 @@ def format_bytes(size):
     else:
         return f"{size / (1024 ** 3):.2f} GB"
 
+
+def detect_suspicious_activity(ip_address, host_data):
+    if len(host_data["ports"]) >= 10:
+        if not any(alert["message"] == "High amount of unique ports accessed" for alert in host_data["alerts"]):
+            host_data["alerts"].append({"message": "High amount of unique ports accessed",
+                                        "severity": "WARNING"})
+    if host_data["bytes"] >= 10*(1024 ** 2):  # 10 MiB
+        if not any(alert["message"] == "High traffic volume" for alert in host_data["alerts"]):
+            host_data["alerts"].append({"message": "High traffic volume",
+                                        "severity": "INFO"})

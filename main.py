@@ -4,7 +4,16 @@ from scapy.all import sniff
 print("Monitoring network traffic... Press Ctrl+C to stop.\n")
 sniff(prn=packet_analyzer.process_packet, count=20, filter="ip")
 
-#packet summary
+packet_analyzer.hosts["192.0.2.50"] = {
+    "packets": 50,
+    "ports": {21, 22, 23, 25, 53, 80, 110, 135, 139, 443, 445, 3389},
+    "bytes": 15000,
+    "alerts": []
+}
+for ip_address, host_data in packet_analyzer.hosts.items():
+    packet_analyzer.detect_suspicious_activity(ip_address, host_data)
+
+# packet summary
 print(f"Network Summary\n"
       f"-------------------------\n"
       f"Total IP packets: {packet_analyzer.stats["total"]}\n"
@@ -19,7 +28,8 @@ for ip_address, host_data in sorted(
         packet_analyzer.hosts.items(),
         key=lambda item: item[1]["packets"],
         reverse=True):
-    print(f"{ip_address} ({packet_analyzer.get_hostname(ip_address)}): {host_data['packets']} packets")
+    print(
+        f"{ip_address} ({packet_analyzer.get_hostname(ip_address)}): {host_data['packets']} packets")
 
 
 print("\nRemote ports\n-------------------------")
@@ -39,3 +49,16 @@ for ip_address, host_data in sorted(
         key=lambda item: item[1]["bytes"],
         reverse=True):
     print(f"{ip_address}: {packet_analyzer.format_bytes(host_data['bytes'])}")
+
+alerts_found = False
+
+for ip_address, host_data in packet_analyzer.hosts.items():
+    if host_data["alerts"]:
+        alerts_found = True
+        print(
+            f"\nSuspicious Activity Detected for {ip_address} ({packet_analyzer.get_hostname(ip_address)}):")
+        for alert in host_data["alerts"]:
+            print(f"- [{alert['severity']}] {alert['message']}")
+
+if not alerts_found:
+    print("\nNo suspicious activity detected.")
