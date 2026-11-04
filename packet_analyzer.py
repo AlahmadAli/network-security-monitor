@@ -1,6 +1,6 @@
 from scapy.all import IP, TCP, UDP
 import socket
-
+import time
 stats = {
     "total": 0,
     "tcp": 0,
@@ -67,7 +67,7 @@ def process_packet(packet):
                                     "ports": set(),
                                     "bytes": 0,
                                     "alerts": [],
-                                    "incoming_ports": set()
+                                    "incoming_ports": {}
                                     }
 
             hosts[remote_ip]["packets"] += 1
@@ -85,12 +85,13 @@ def process_packet(packet):
         if remote_port is not None:
             hosts[remote_ip]["ports"].add(remote_port)
 
-        # collect destination ports from incoming TCP connection attempts
+        # Track incoming TCP connection attempts and evaluate alerts
         if remote_ip is not None and destination_ip == local_ip and protocol == "TCP":
             flags = packet[TCP].flags
 
             if (flags & 0x02) and not (flags & 0x10):
-                hosts[remote_ip]["incoming_ports"].add(destination_port)
+                hosts[remote_ip]["incoming_ports"][destination_port] = time.monotonic()
+                detect_suspicious_activity(remote_ip, hosts[remote_ip])
 
         # summary
         print(f"Source: {source_ip}:{source_port}\n"
@@ -130,11 +131,40 @@ def format_bytes(size):
 
 
 def detect_suspicious_activity(ip_address, host_data):
-    if len(host_data["ports"]) >= 10:
-        if not any(alert["message"] == "High amount of unique ports accessed" for alert in host_data["alerts"]):
-            host_data["alerts"].append({"message": "High amount of unique ports accessed",
-                                        "severity": "WARNING"})
-    if host_data["bytes"] >= 10*(1024 ** 2):  # 10 MiB
-        if not any(alert["message"] == "High traffic volume" for alert in host_data["alerts"]):
-            host_data["alerts"].append({"message": "High traffic volume",
-                                        "severity": "INFO"})
+    current_time = time.monotonic()
+    incoming_ports = host_data["incoming_ports"]
+
+    # If over 10 seconds, remove
+    expired_ports = [
+        port
+        for port, last_seen in incoming_ports.items()
+        if current_time - last_seen > 10
+    ]
+
+    for port in expired_ports:
+        del incoming_ports[port]
+
+    scan_message = (
+        "Possible TCP port scan: incoming SYNs to at least "
+        "10 distinct ports within 10 seconds"
+    )
+
+    if len(incoming_ports) >= 10:
+        if not any(
+            alert["message"] == scan_message
+            for alert in host_data["alerts"]
+        ):
+            host_data["alerts"].append({
+                "message": scan_message,
+                "severity": "WARNING"
+            })
+
+    if host_data["bytes"] >= 10 * (1024 ** 2):
+        if not any(
+            alert["message"] == "High traffic volume"
+            for alert in host_data["alerts"]
+        ):
+            host_data["alerts"].append({
+                "message": "High traffic volume",
+                "severity": "INFO"
+            })
