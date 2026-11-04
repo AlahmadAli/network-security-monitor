@@ -66,7 +66,8 @@ def process_packet(packet):
                 hosts[remote_ip] = {"packets": 0,
                                     "ports": set(),
                                     "bytes": 0,
-                                    "alerts": []
+                                    "alerts": [],
+                                    "incoming_ports": set()
                                     }
 
             hosts[remote_ip]["packets"] += 1
@@ -83,6 +84,13 @@ def process_packet(packet):
 
         if remote_port is not None:
             hosts[remote_ip]["ports"].add(remote_port)
+
+        # collect destination ports from incoming TCP connection attempts
+        if remote_ip is not None and destination_ip == local_ip and protocol == "TCP":
+            flags = packet[TCP].flags
+
+            if (flags & 0x02) and not (flags & 0x10):
+                hosts[remote_ip]["incoming_ports"].add(destination_port)
 
         # summary
         print(f"Source: {source_ip}:{source_port}\n"
