@@ -94,15 +94,19 @@ def process_packet(packet):
         if remote_port is not None:
             hosts[remote_ip]["ports"].add(remote_port)
 
-        # Track incoming TCP connection attempts and evaluate alerts
+        # Track incoming TCP connection attempts and evaluate alerts.
+        new_syn = False
         if remote_ip is not None and destination_ip == local_ip and protocol == "TCP":
             flags = packet[TCP].flags
 
             if (flags & 0x02) and not (flags & 0x10):
                 hosts[remote_ip]["incoming_ports"][destination_port] = time.monotonic()
                 hosts[remote_ip]["syn_count"] += 1
-                detect_suspicious_activity(
-                    remote_ip, hosts[remote_ip], new_syn=True)
+                new_syn = True
+
+        if remote_ip is not None:
+            detect_suspicious_activity(
+                remote_ip, hosts[remote_ip], new_syn=new_syn, new_packet=True)
 
         # summary
         print(f"Source: {source_ip}:{source_port}\n"
@@ -147,7 +151,7 @@ def format_bytes(size):
         return f"{size / (1024 ** 3):.2f} GB"
 
 
-def detect_suspicious_activity(ip_address, host_data, *, new_syn=False):
+def detect_suspicious_activity(ip_address, host_data, *, new_syn=False, new_packet=False):
     current_time = time.monotonic()
     incoming_ports = host_data["incoming_ports"]
 
@@ -208,13 +212,27 @@ def detect_suspicious_activity(ip_address, host_data, *, new_syn=False):
                     "last_seen_monotonic": current_monotonic,
                     "incident_update": []
                 })
-    # need incident update for high traffic volume alert... will finish soom
-    if host_data["bytes"] >= 10 * (1024 ** 2):
-        if not any(
-                alert["message"] == "High traffic volume" for alert in host_data["alerts"]):
-            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    # Only new packets can create or update traffic incidents.
+    if new_packet and host_data["bytes"] >= 10 * (1024 ** 2):
+        current_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        existing_alert = next(
+            (a for a in reversed(host_data["alerts"])
+             if a["message"] == "High traffic volume"),
+            None
+        )
+
+        if (existing_alert is None or
+                current_time - existing_alert["last_seen_monotonic"] >= 5):
             host_data["alerts"].append({
                 "message": "High traffic volume",
                 "severity": "INFO",
-                "first_seen": timestamp
+                "first_seen": current_time_str,
+                "last_seen_monotonic": current_time,
+                "incident_update": []
             })
+        else:
+            existing_alert["incident_update"].append(
+                f"More traffic detected at {current_time_str} "
+                f"(total: {format_bytes(host_data['bytes'])})"
+            )
+            existing_alert["last_seen_monotonic"] = current_time

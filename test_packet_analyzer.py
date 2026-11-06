@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from scapy.all import IP, TCP
+from scapy.all import IP, TCP, UDP
 import packet_analyzer as analyzer
 
 
@@ -99,6 +99,68 @@ class TestPortScanDetection(unittest.TestCase):
             set(analyzer.hosts[self.peer]["incoming_ports"]),
             {1009},
         )
+
+
+class TestHighTrafficIncidents(unittest.TestCase):
+    def setUp(self):
+        analyzer.hosts.clear()
+        for name in analyzer.stats:
+            analyzer.stats[name] = 0
+        self.peer = "198.51.100.20"
+        clock_patch = patch("packet_analyzer.time.monotonic", return_value=100.0)
+        self.clock = clock_patch.start()
+        self.addCleanup(clock_patch.stop)
+
+    def packet(self, outgoing=False):
+        src, dst = ((analyzer.local_ip, self.peer) if outgoing else
+                    (self.peer, analyzer.local_ip))
+        packet = IP(src=src, dst=dst) / UDP(sport=40000, dport=5000)
+        with patch("builtins.print"):
+            analyzer.process_packet(packet)
+
+    def reach_threshold(self):
+        self.packet()
+        host = analyzer.hosts[self.peer]
+        host["bytes"] = 10 * 1024 ** 2 - 28
+        self.packet()
+        return host
+
+    def test_threshold_and_update_on_outgoing_udp(self):
+        self.packet()
+        self.assertEqual(analyzer.hosts[self.peer]["alerts"], [])
+        host = self.reach_threshold()
+        self.assertEqual(len(host["alerts"]), 1)
+        alert = host["alerts"][0]
+        self.assertEqual(alert["severity"], "INFO")
+        self.assertEqual(alert["incident_update"], [])
+        self.clock.return_value = 104
+        self.packet(outgoing=True)
+        self.assertEqual(len(host["alerts"]), 1)
+        self.assertEqual(len(alert["incident_update"]), 1)
+        self.assertIn("total:", alert["incident_update"][0])
+        self.assertEqual(alert["last_seen_monotonic"], 104)
+
+    def test_gap_and_latest_incident(self):
+        for gap in (5, 5.1):
+            with self.subTest(gap=gap):
+                analyzer.hosts.clear()
+                self.clock.return_value = 100
+                host = self.reach_threshold()
+                self.clock.return_value = 100 + gap
+                self.packet()
+                self.assertEqual(len(host["alerts"]), 2)
+                self.clock.return_value = 101 + gap
+                self.packet()
+                self.assertEqual(host["alerts"][0]["incident_update"], [])
+                self.assertEqual(len(host["alerts"][1]["incident_update"]), 1)
+
+    def test_summary_does_not_create_or_update_incidents(self):
+        host = self.reach_threshold()
+        analyzer.detect_suspicious_activity(self.peer, host)
+        self.clock.return_value = 106
+        analyzer.detect_suspicious_activity(self.peer, host)
+        self.assertEqual(len(host["alerts"]), 1)
+        self.assertEqual(host["alerts"][0]["incident_update"], [])
 
 
 if __name__ == "__main__":
