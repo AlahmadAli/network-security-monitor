@@ -60,6 +60,32 @@ class TestPortScanDetection(unittest.TestCase):
 
         self.assertEqual(len(self.alerts()), 1)
 
+    def test_incoming_syn_ack_does_not_count(self):
+        for port in range(1000, 1010):
+            packet = (
+                IP(src=self.peer, dst=analyzer.local_ip)
+                / TCP(dport=port, flags="SA")
+            )
+
+            with patch("builtins.print"):
+                analyzer.process_packet(packet)
+
+        self.assertEqual(analyzer.hosts[self.peer]["incoming_ports"], {})
+        self.assertEqual(self.alerts(), [])
+
+    def test_outgoing_syn_does_not_count(self):
+        for port in range(1000, 1010):
+            packet = (
+                IP(src=analyzer.local_ip, dst=self.peer)
+                / TCP(dport=port, flags="S")
+            )
+
+            with patch("builtins.print"):
+                analyzer.process_packet(packet)
+
+        self.assertEqual(analyzer.hosts[self.peer]["incoming_ports"], {})
+        self.assertEqual(self.alerts(), [])
+
     def test_expired_ports_do_not_trigger_alert(self):
         for port in range(1000, 1009):
             self.incoming_syn(port)

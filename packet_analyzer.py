@@ -1,6 +1,9 @@
+from multiprocessing.util import INFO
+
 from scapy.all import IP, TCP, UDP
 import socket
 import time
+from datetime import datetime
 stats = {
     "total": 0,
     "tcp": 0,
@@ -9,6 +12,8 @@ stats = {
 }
 
 hosts = {}
+
+# Get my ip address
 
 
 def get_local_ip():
@@ -21,6 +26,8 @@ def get_local_ip():
 
 local_ip = get_local_ip()
 
+# Process incoming packets and update statistics
+
 
 def process_packet(packet):
     if IP in packet:
@@ -28,6 +35,7 @@ def process_packet(packet):
         source_ip = packet[IP].src
         destination_ip = packet[IP].dst
 
+        # Determine the remote IP address and the direction of the packet
         if destination_ip == local_ip:
             remote_ip = source_ip
             remote_port_location = "source_port"
@@ -67,7 +75,8 @@ def process_packet(packet):
                                     "ports": set(),
                                     "bytes": 0,
                                     "alerts": [],
-                                    "incoming_ports": {}
+                                    "incoming_ports": {},
+                                    "syn_count": 0
                                     }
 
             hosts[remote_ip]["packets"] += 1
@@ -91,7 +100,9 @@ def process_packet(packet):
 
             if (flags & 0x02) and not (flags & 0x10):
                 hosts[remote_ip]["incoming_ports"][destination_port] = time.monotonic()
-                detect_suspicious_activity(remote_ip, hosts[remote_ip])
+                hosts[remote_ip]["syn_count"] += 1
+                detect_suspicious_activity(
+                    remote_ip, hosts[remote_ip], new_syn=True)
 
         # summary
         print(f"Source: {source_ip}:{source_port}\n"
@@ -99,6 +110,9 @@ def process_packet(packet):
               f"Protocol: {protocol}\n"
               f"-------------------------\n"
               )
+
+# gives the service name for a given port number, or "Unknown" if the service is not recognized
+# (e.g., port 80 is "http", port 443 is "https", etc.)
 
 
 def get_service(port):
@@ -108,6 +122,9 @@ def get_service(port):
         service = "Unknown"
 
     return service
+
+# gives the hostname for a given IP address, or "Unknown" if the hostname is not recognized
+#
 
 
 def get_hostname(ip_address):
@@ -130,7 +147,7 @@ def format_bytes(size):
         return f"{size / (1024 ** 3):.2f} GB"
 
 
-def detect_suspicious_activity(ip_address, host_data):
+def detect_suspicious_activity(ip_address, host_data, *, new_syn=False):
     current_time = time.monotonic()
     incoming_ports = host_data["incoming_ports"]
 
@@ -149,22 +166,55 @@ def detect_suspicious_activity(ip_address, host_data):
         "10 distinct ports within 10 seconds"
     )
 
-    if len(incoming_ports) >= 10:
-        if not any(
-            alert["message"] == scan_message
-            for alert in host_data["alerts"]
-        ):
+    # over 10 ports = alert
+    if new_syn and len(incoming_ports) >= 10:
+        current_monotonic = time.monotonic()
+        current_time_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        existing_alert = next(
+            (a for a in reversed(host_data["alerts"])
+             if a["message"] == scan_message),
+            None
+        )
+
+        # If no existing alert, create a new one
+        if not existing_alert:
             host_data["alerts"].append({
                 "message": scan_message,
-                "severity": "WARNING"
+                "severity": "WARNING",
+                "first_seen": current_time_str,
+                "last_seen_monotonic": current_monotonic,
+                "incident_update": []
             })
 
+        # exisitng alert exists, check if the last seen time is within 5 seconds
+        else:
+            time_passed = current_monotonic - \
+                existing_alert["last_seen_monotonic"]
+
+            # < 5 secs, add an incident update to the existing alert rather than creating a new alert
+            if time_passed < 5:
+                existing_alert["incident_update"].append(
+                    f"New SYN detected at {current_time_str}"
+                )
+                existing_alert["last_seen_monotonic"] = current_monotonic
+
+            # > 5 secs, create a fresh alert
+            else:
+                host_data["alerts"].append({
+                    "message": scan_message,
+                    "severity": "WARNING",
+                    "first_seen": current_time_str,
+                    "last_seen_monotonic": current_monotonic,
+                    "incident_update": []
+                })
+    # need incident update for high traffic volume alert... will finish soom
     if host_data["bytes"] >= 10 * (1024 ** 2):
         if not any(
-            alert["message"] == "High traffic volume"
-            for alert in host_data["alerts"]
-        ):
+                alert["message"] == "High traffic volume" for alert in host_data["alerts"]):
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             host_data["alerts"].append({
                 "message": "High traffic volume",
-                "severity": "INFO"
+                "severity": "INFO",
+                "first_seen": timestamp
             })
